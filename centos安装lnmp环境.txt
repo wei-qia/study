@@ -1,0 +1,164 @@
+sudo vim /etc/profile // 配置环境变量
+source /etc/profile
+sudo vim /etc/sudoers // 配置 sudo支持的命令
+
+/******* 切换yum源 *********/
+yum install -y vim
+yum install -y wget
+
+mkdir /etc/yum.repos.d/bak
+mv /etc/yum.repos.d/* /etc/yum.repos.d/bak
+curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+curl -o /etc/yum.repos.d/epel.repo http://mirrors.aliyun.com/repo/epel-7.repo
+
+yum clean all
+yum makecache
+yum repolist
+
+
+/******* 安装php **********/
+sudo tar -zxvf php压缩包 // 解压php压缩包
+sudo yum install -y gcc gcc++ libxml2-devel // 安装必备库
+sudo ./configure --prefix=/usr/local/php7 --enable-fpm --enable-mysqlnd --with-pdo-mysql=mysqlnd // 编译安装php并开启fpm
+sudo make // 编译
+sudo make install //安装
+
+/******* 安装mysql ******/
+sudo tar -zxvf mysql压缩包 // 解压mysql压缩包
+sudo yum install cmake gcc-c++ ncurses-devel perl-Data-Dumper boost boost-doc boost-devel openssl-devel // 安装必备库
+cmake -DCMAKE_INSTALL_PREFIX=/usr/local/mysql -DMYSQL_DATADIR=/usr/local/mysql/data -DSYSCONFDIR=/etc -DMYSQL_USER=mysql -DWITH_MYISAM_STORAGE_ENGINE=1 -DWITH_INNOBASE_STORAGE_ENGINE=1 -DWITH_ARCHIVE_STORAGE_ENGINE=1 -DWITH_MEMORY_STORAGE_ENGINE=1 -DWITH_READLINE=1 -DMYSQL_UNIX_ADDR=/usr/local/mysql/mysql.sock -DMYSQL_TCP_PORT=3306 -DENABLED_LOCAL_INFILE=1 -DENABLE_DOWNLOADS=1 -DWITH_PARTITION_STORAGE_ENGINE=1 -DEXTRA_CHARSETS=all -DDEFAULT_CHARSET=utf8 -DDEFAULT_CONLLATION=utf8_general_ci -DWITH_DEBUG=0 -DMYSQL_MAINTAINER_MODE=0 -DWITH_SSL:STRING=bundled -DWITH_ZLIB:STRING=bundled -DDOWNLOAD_BOOST=1 -DWITH_BOOST=./boost -DWITH_SSL=system
+// 编译安装
+make 
+make install
+
+groupadd mysql
+useradd mysql -g mysql -M -s /sbin/nologin // 添加mysql用户和mysql用户组
+-g：指定新用户所属的用户组(group)
+-M：不建立根目录
+-s：定义其使用的shell，/sbin/nologin代表用户不能登录系统。
+
+mysqld --console --skip-grant-tables // 免root密码
+alter user user() identified by "root";
+
+
+/******* 安装apache ********/
+安装apr apr-util(apache官网下载) 解压后放入httpd文件
+
+wget https://ftp.pcre.org/pub/pcre/pcre-8.13.tar.gz // 下载pcre
+./configure --prefix=/usr/localpcre-8.37
+
+yum install -y expat-devel // 安装expat库
+./configure --prefix=/usr/local/apache -with-pcre=/usr/local/pcre-8.13/bin/pcre-config -with-included-apr
+make
+make install
+cd /usr/local/apache/bin
+sudo ./apachectl -k start // 启动服务
+sudo firewall-cmd --zone=public --add-port=80/tcp --permanent // 关闭防火墙对80端口的屏蔽
+sudo systemctl restart firewalld.service // 重新启动防火墙
+
+
+/******* 安装nginx ******/
+./configure --prefix=/usr/local/nginx --with-pcre=../pcre-8.13
+make 
+make install
+cd /usr/local/nginx/sbin/
+
+ps aux | grep httpd // 结束apache服务
+sudo kill -9
+./nginx // 启动nginx
+
+/****** 配置nginx ********/
+cd /usr/local/php7/etc
+sudo mv php-fpm.conf.default php-fpm.conf
+cd /usr/local/php7/etc/php-fpm.d
+sudo cp www.conf.default www.conf
+/usr/local/php7/sbin/php-fpm // 启动fpm服务
+修改/usr/local/nginx/conf/nginx.conf 中关于php的配置
+
+
+/****** 开机启动nginx ***********/
+/lib/systemd/system/nginx.service
+[Unit]
+Description=nginx
+After=network.target
+ 
+[Service]
+Type=forking
+ExecStart=/usr/local/nginx/sbin/nginx
+ExecReload=/usr/local/nginx/sbin/nginx -s reload
+ExecStop=/usr/local/nginx/sbin/nginx -s quit
+PrivateTmp=true
+ 
+[Install]
+WantedBy=multi-user.target
+
+Description:描述服务
+After:描述服务类别
+[Service]服务运行参数的设置
+Type=forking是后台运行的形式
+ExecStart为服务的具体运行命令
+ExecReload为重启命令
+ExecStop为停止命令
+PrivateTmp=True表示给服务分配独立的临时空间
+注意：[Service]的启动、重启、停止命令全部要求使用绝对路径
+[Install]运行级别下服务安装的相关设置，可设置为多用户，即系统运行级别为3
+
+systemctl enable nginx.service 开启
+
+/****** 开机启动php-fpm ***********/
+/lib/systemd/system/php-fpm.service
+[Unit]
+Description=php-fpm
+After=network.target
+[Service]
+Type=forking
+ExecStart=/usr/local/php7/sbin/php-fpm
+ExecStop=/bin/pkill -9 /usr/local/php7/sbin/php-fpm
+PrivateTmp=true
+[Install]
+WantedBy=multi-user.target
+
+
+systemctl enable php-fpm.service 开启
+
+
+/****** 开机启动mysql ***********/
+/lib/systemd/system/mysql.service
+[Unit]
+Description=MySQL Server
+Documentation=man:mysqld(8)
+Documentation=http://dev.mysql.com/doc/refman/en/using-systemd.html
+After=network.target
+After=syslog.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+User=mysql
+Group=mysql
+ExecStart=/usr/local/mysql/bin/mysqld --user=root
+LimitNOFILE = 5000
+#Restart=on-failure
+#RestartPreventExitStatus=1
+#PrivateTmp=false
+
+systemctl enable mysql.service 开启
+
+
+/*************php 安装扩展*********/
+yum -y install autoconf
+进入扩展目录
+phpize
+./configure --with-php-config=/usr/local/php7/bin/php-config 
+make
+sudo make install
+
+cd /usr/local/php7/lib/
+vim php.ini
+extension_dir='扩展安装的目录'
+extension=扩展名称.so
+
+安装mysqlnd时先输入下行
+export PHP_OPENSSL_DIR=yes
+

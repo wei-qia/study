@@ -1,0 +1,2 @@
+chown jay:fefjay my.txt  
+chown -R jay:fefjay my // 设置文件或目录属于jay用户和fefjay用户组

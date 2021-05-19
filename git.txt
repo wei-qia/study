@@ -1,0 +1,5 @@
+ssh-keygen -t rsa -C "youremail@example.com" 添加ssh秘钥
+
+// 同步远程仓库 
+git clone 地址 // 直接克隆
+git remote add origin 地址 // 指定远程仓库地址

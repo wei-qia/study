@@ -6,3 +6,21 @@ git remote add origin 地址 // 指定远程仓库地址
 
 
 git branch // 查看当前分支
+
+
+/********* 合并分支 *********/
+1.切换到子分支
+git checkout dev
+git add .
+git commit -m 'message'
+git push -u origin dev
+2.切换到主分支
+git checkout master
+git pull origin master // 拉取远程仓库主分支代码 
+git merge dev // 合并分支
+git status // 查看状态
+git push origin master // 将最终代码提交到远程仓库
+git remote update origin --prune // 更新远程分支列表
+git branch -a // 查看所有分支
+git push origin --delete dev //删除远程分支
+git branch -d dev //删除本地分支
